@@ -181,7 +181,7 @@ cron.schedule("* * * * *", async () => {
 })
 
 
-const PORT = Number(process.env.PORT)|| 8080
+const PORT = Number(process.env.PORT)
 
 async function boot() {
   try {
@@ -189,7 +189,7 @@ async function boot() {
     console.log("DB connected")
     console.log("PORT =", PORT)
 
-    app.listen(PORT, "0.0.0.0", () => {
+    app.listen(PORT, () => {
       console.log(`Listening on ${PORT}`)
     })
 
