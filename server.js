@@ -181,7 +181,7 @@ cron.schedule("* * * * *", async () => {
 })
 
 
-const PORT = Number(process.env.PORT)
+const PORT = process.env.PORT;
 
 async function boot() {
   try {
@@ -200,6 +200,7 @@ async function boot() {
 }
 
 boot()
+
 
 
 
