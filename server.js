@@ -180,26 +180,12 @@ cron.schedule("* * * * *", async () => {
   }
 })
 
+const PORT = process.env.PORT || 10000;
 
-const PORT = process.env.PORT;
+app.listen(PORT, () => {
+  console.log(`Server running on ${PORT}`);
+});
 
-async function boot() {
-  try {
-    await db.query("SELECT 1")
-    console.log("DB connected")
-    console.log("PORT =", PORT)
-
-    app.listen(PORT, () => {
-      console.log(`Listening on ${PORT}`)
-    })
-
-  } catch (err) {
-    console.error("Startup failed:", err)
-    process.exit(1)
-  }
-}
-
-boot()
 
 
 
