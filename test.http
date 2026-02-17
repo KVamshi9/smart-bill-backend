@@ -1,0 +1,51 @@
+@token =  eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOjIsImlhdCI6MTc3MTMzMDgyMCwiZXhwIjoxNzcxOTM1NjIwfQ.sEYtRTLOlA4Mx3AEtHhZ4wpyVyojrLAaQzyWo_M4SzE
+
+####
+
+POST http://localhost:5000/users/
+Content-Type: application/json
+
+{
+  "name":"vamshi",
+  "email":"vamshi@test.com",
+  "phone":"9999999999",
+  "password":"123456"
+}
+
+###
+POST http://localhost:5000/login/
+Content-Type: application/json
+
+{
+  "email":"vamshi@test.com",
+  "password":"123456"
+}
+
+###
+
+GET http://localhost:5000/profile
+Authorization: Bearer {{token}}
+
+###
+
+GET http://localhost:5000/bills
+Authorization: Bearer {{token}}
+
+
+###
+POST http://localhost:5000/bills
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+  "title":"Electricity",
+  "amount":"850",
+  "due_day":"17",
+  "reminder_time":"23:59",
+  "phone":"whatsapp:+919999999999"
+}
+
+###
+
+GET http://localhost:5000/bills
+Authorization: Bearer {{token}}

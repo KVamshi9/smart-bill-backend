@@ -4,10 +4,14 @@ const mysql = require("mysql2/promise")
 const cors = require("cors")
 const cron = require("node-cron")
 const twilio = require("twilio")
+const bcrypt = require("bcrypt")
+const jwt = require("jsonwebtoken")
 
 const app = express()
 app.use(cors())
 app.use(express.json())
+
+// db creation
 
 const db = mysql.createPool({
   host: process.env.MYSQLHOST,
@@ -20,6 +24,7 @@ const db = mysql.createPool({
     : false
 });
 
+// whatsapp twilio
 
 const client = twilio(
   process.env.TWILIO_ACCOUNT_SID,
@@ -38,28 +43,118 @@ const sendWhatsApp = async (phone, text) => {
   }
 }
 
+// auth middleware
 
-app.get("/health", (req,res)=>{
-  res.status(200).json({status:"ok"})
+const authenticateToken = async (request, response, next) => {
+  let jwtToken
+  const authHeader = request.headers["authorization"]
+
+  if (authHeader !== undefined) {
+    jwtToken = authHeader.split(" ")[1]
+  }
+
+  if (jwtToken === undefined) {
+    response.status(401)
+    response.send("Invalid Access Token")
+  } else {
+    jwt.verify(jwtToken, process.env.JWT_SECRET, async (error, payload) => {
+      if (error) {
+        response.status(401)
+        response.send("Invalid Access Token")
+      } else {
+        request.userId = payload.userId
+        next()
+      }
+    })
+  }
+}
+
+// register
+
+app.post("/users/", async (request, response) => {
+
+  const {name,email,phone,password} = request.body
+
+  let checkQuery = `
+    SELECT * FROM users WHERE email='${email}'
+  `
+  let [dbUser] = await db.execute(checkQuery)
+
+  if (dbUser.length !== 0) {
+    response.status(400)
+    response.send("User already exists")
+  } else {
+
+    const hashedPassword = await bcrypt.hash(password,10)
+
+    let createQuery = `
+      INSERT INTO 
+        users (name,email,phone,password_hash)
+      VALUES 
+        ('${name}',
+        '${email}',
+        '${phone}',
+        '${hashedPassword}'
+        )`
+
+    await db.execute(createQuery)
+    response.send("User created successfully")
+  }
 })
 
-  
-// CREATE BILL API
+// login
 
-app.post('/bills', async (request, response) => {
+app.post("/login/", async (request, response) => {
+
+  const {email,password} = request.body
+
+  let query = `
+    SELECT * FROM users WHERE email='${email}'
+  `
+  let [dbUser] = await db.execute(query)
+
+  if (dbUser.length === 0) {
+    response.status(400)
+    response.send("Invalid User")
+  } else {
+
+    let user = dbUser[0]
+
+    const isPasswordMatched = await bcrypt.compare(password,user.password_hash)
+
+    if (isPasswordMatched === true) {
+
+      const payload = { userId: user.id }
+
+      const jwtToken = jwt.sign(payload,process.env.JWT_SECRET,{expiresIn:"7d"})
+
+      response.send({jwtToken})
+
+    } else {
+      response.status(400)
+      response.send("Invalid Password")
+    }
+  }
+})
+
+
+// CREATE BILL
+
+app.post('/bills', authenticateToken, async (request, response) => {
 
   const {title, amount, due_day, reminder_time, phone} = request.body
 
   let createBillQuery = `
     INSERT INTO bills
-    (title, amount, due_day, reminder_time, phone, message)
+    (title, amount, due_day, reminder_time, phone, message, user_id)
     VALUES (
       '${title}',
       '${amount}',
       '${due_day}',
       '${reminder_time}',
       '${phone}',
-      'EMI Reminder'
+      'EMI Reminder',
+      '${request.userId}'
     );
   `
 
@@ -71,12 +166,13 @@ app.post('/bills', async (request, response) => {
   }
 })
 
-// GET BILL API
+// get bill
 
-app.get('/bills', async (request, response) => {
+app.get('/bills', authenticateToken, async (request, response) => {
 
   let getBillsQuery = `
     SELECT * FROM bills
+    WHERE user_id='${request.userId}'
     ORDER BY due_day ASC;
   `
 
@@ -88,9 +184,9 @@ app.get('/bills', async (request, response) => {
   }
 })
 
-// UPDATE BILL API
+// update bill
 
-app.put('/bills/:id', async (request, response) => {
+app.put('/bills/:id', authenticateToken, async (request, response) => {
 
   const {id} = request.params
   const {title, amount, due_day, reminder_time, phone, message} = request.body
@@ -104,7 +200,7 @@ app.put('/bills/:id', async (request, response) => {
       reminder_time='${reminder_time}',
       phone='${phone}',
       message='${message}'
-    WHERE id='${id}';
+    WHERE id='${id}' AND user_id='${request.userId}';
   `
 
   try {
@@ -115,15 +211,15 @@ app.put('/bills/:id', async (request, response) => {
   }
 })
 
-// DELETE BILL API
+// delete
 
-app.delete('/bills/:id', async (request, response) => {
+app.delete('/bills/:id', authenticateToken, async (request, response) => {
 
   const {id} = request.params
 
   let deleteBillQuery = `
     DELETE FROM bills
-    WHERE id='${id}';
+    WHERE id='${id}' AND user_id='${request.userId}';
   `
 
   try {
@@ -134,7 +230,7 @@ app.delete('/bills/:id', async (request, response) => {
   }
 })
 
-// CRON SCHEDULAR
+// cron job
 
 cron.schedule("* * * * *", async () => {
   try {
@@ -142,7 +238,7 @@ cron.schedule("* * * * *", async () => {
     console.log(`cron tick : ${new Date()}`)
 
     const now = new Date(
-    new Date().toLocaleString("en-US", { timeZone: "Asia/Kolkata" })
+      new Date().toLocaleString("en-US", { timeZone: "Asia/Kolkata" })
     )
 
     const todayDay = now.getDate()
@@ -180,13 +276,10 @@ cron.schedule("* * * * *", async () => {
   }
 })
 
+
+// api start
 const PORT = process.env.PORT || 10000;
 
 app.listen(PORT, () => {
   console.log(`Server running on ${PORT}`);
 });
-
-
-
-
-
