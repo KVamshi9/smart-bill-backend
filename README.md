@@ -1,8 +1,8 @@
-# Smart Bill Notifier — Automated EMI Reminder System (Backend)
+# Smart Bill Notifier — Backend (Authenticated Automated Reminder API)
 
-A Node.js service that automatically sends recurring WhatsApp payment reminders using a rule-based scheduling engine.
+A Node.js cloud service that manages users and recurring bills, and automatically sends WhatsApp reminders using a background scheduler.
 
-Instead of storing one-time dates, the system stores **monthly payment rules** and evaluates them continuously in the background.
+Instead of storing fixed future dates, the system stores **monthly payment rules** and evaluates them continuously — allowing reminders to run forever without user interaction.
 
 ---
 
@@ -10,114 +10,134 @@ Instead of storing one-time dates, the system stores **monthly payment rules** a
 
 https://smart-bill-backend-1.onrender.com
 
-Health Check:
+Health Check
 https://smart-bill-backend-1.onrender.com/health
 
 ---
 
-## Core Idea
+## What This Backend Does
 
-Each bill is stored as:
+This server acts as an automation engine, not just a data API.
 
-• Day of month
-• Reminder time
+It:
 
-A background scheduler checks every minute.
-When the rule matches current time → WhatsApp reminder is sent.
+• Authenticates users securely
+• Stores bills per user
+• Runs a scheduler every minute
+• Sends WhatsApp reminders automatically
+• Prevents duplicate alerts
+• Works even if user closes browser
 
-The same record works forever without re-creating the bill.
-
----
-
-## Features
-
-• REST APIs for bills CRUD
-• Automatic recurring monthly reminder logic
-• WhatsApp notification delivery (Twilio)
-• Duplicate reminder prevention
-• Persistent MySQL storage
-• Background cron scheduler
-• Cloud deployment
+The frontend is only a control panel — automation lives here.
 
 ---
 
-## Architecture
+## Core Logic (Rule-Based Recurrence)
 
-Client (React UI) → REST API (Node.js) → MySQL Database
-↓
-Background Cron Scheduler
-↓
-WhatsApp Notification
+Each bill stores:
 
----
+• due_day (1–31)
+• reminder_time
 
-## Reminder Logic
-
-Every minute:
+Every minute the scheduler checks:
 
 If
-(current_day == due_day) AND
-(current_time == reminder_time) AND
-(month_not_already_triggered)
+current_day == due_day
+AND current_time == reminder_time
+AND reminder not sent this month
 
-→ Send WhatsApp message
-→ Update last_notified_month
-→ Prevent duplicate alerts
+→ Send WhatsApp reminder
+→ Save month in `last_notified_month`
 
-This ensures reminders work even if frontend is closed.
+A single record repeats forever — no need to recreate bills monthly.
+
+---
+
+## Authentication
+
+JWT based stateless authentication.
+
+After login, each request must include:
+
+Authorization: Bearer <token>
+
+Server extracts `user_id` and filters all queries.
+Users can only access their own bills.
 
 ---
 
 ## API Endpoints
 
-GET /bills
-POST /bills
-PUT /bills/:id
-DELETE /bills/:id
-GET /health
+### Authentication
+
+POST /users → Register
+POST /login → Login and receive JWT
+
+### Bills (Protected Routes)
+
+GET /bills → Get logged-in user bills
+POST /bills → Create bill
+PUT /bills/:id → Update bill
+DELETE /bills/:id → Delete bill
+
+### System
+
+GET /health → Deployment health check
+
+---
+
+## Architecture
+
+React Frontend
+→ Express REST API
+→ MySQL Database (Railway)
+→ Background Cron Scheduler
+→ Twilio WhatsApp Delivery
 
 ---
 
 ## Database Schema
 
-Table: `bills`
+### users
 
-| Column              | Type       | Description                          |
-| ------------------- | ---------- | ------------------------------------ |
-| id                  | INT (PK)   | Unique bill identifier               |
-| title               | VARCHAR    | Name of the bill                     |
-| amount              | DECIMAL    | Payment amount                       |
-| due_day             | INT        | Day of month (1–31)                  |
-| reminder_time       | TIME       | Reminder trigger time                |
-| phone               | VARCHAR    | WhatsApp recipient number            |
-| message             | TEXT       | Notification message                 |
-| last_notified_month | VARCHAR(7) | Prevents duplicate monthly reminders |
-| created_at          | TIMESTAMP  | Record creation time                 |
+id | name | email | phone | password_hash | created_at
 
-### Design Decision
+### bills
 
-Instead of storing fixed future dates, the system stores rules (day + time).
-This allows one database record to automatically repeat every month without duplication.
+id | title | amount | due_day | reminder_time | phone | message | last_notified_month | user_id | created_at
+
+Foreign Key
+bills.user_id → users.id (ON DELETE CASCADE)
+
+Each bill belongs to one user — ensures multi-user isolation.
 
 ---
 
-## Running Locally
+## Environment Variables (.env)
 
-Create `.env`
+PORT=10000
 
-PORT=5000
-DB_HOST=localhost
-DB_USER=root
-DB_PASSWORD=yourpassword
-DB_NAME=emi_db
-TWILIO_ACCOUNT_SID=xxx
-TWILIO_AUTH_TOKEN=xxx
-TWILIO_WHATSAPP_NUMBER=xxx
+DB_HOST=
+DB_USER=
+DB_PASSWORD=
+DB_NAME=
+DB_PORT=
 
-Install & run:
+JWT_SECRET=
+
+TWILIO_ACCOUNT_SID=
+TWILIO_AUTH_TOKEN=
+TWILIO_WHATSAPP_NUMBER=
+
+---
+
+## Run Locally
 
 npm install
 node server.js
+
+Server runs at
+http://localhost:10000
 
 ---
 
@@ -125,35 +145,47 @@ node server.js
 
 Node.js
 Express.js
-MySQL
-node-cron
+MySQL (Railway Cloud DB)
+JWT Authentication
+node-cron Scheduler
 Twilio WhatsApp API
-Render Cloud Hosting
+Render Hosting
 
 ---
 
-## Why Backend Scheduling
+## Why Server-Side Scheduling
 
-Reminder logic runs on server cron instead of frontend timers.
+Frontend timers stop when browser closes.
+Server scheduler runs continuously, ensuring reliable reminders.
 
-Reason:
-Frontend timers stop when the browser closes.
-Server scheduler guarantees reminders run continuously.
+The system behaves like an automated service rather than a webpage feature.
 
 ---
 
-## Future Improvements
+## Design Decisions
 
-• Multi-user authentication
-• Weekly/custom recurrence rules
+Rule-based recurrence instead of storing dates
+→ Infinite monthly automation from one row
+
+JWT authentication instead of sessions
+→ Stateless scalable architecture
+
+Foreign-key ownership model
+→ Users cannot access other users’ data
+
+---
+
+## Future Scope
+
 • Email notifications
-• Queue-based background worker
-• Last-day-of-month intelligent handling
+• Weekly or yearly recurrence
+• Payment status tracking
+• Queue-based job processing
+• Multiple notification channels
 
 ---
 
 ## Author
 
 Vamshi K
-
-Educational assignment project
+Educational full-stack automation project
