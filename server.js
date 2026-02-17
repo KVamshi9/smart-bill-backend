@@ -278,7 +278,11 @@ cron.schedule("* * * * *", async () => {
 
 
 // api start
-const PORT = process.env.PORT || 10000;
+const PORT = process.env.PORT || 3000;
+
+app.get("/health", (req,res)=>{
+  res.send("OK");
+});
 
 app.listen(PORT, () => {
   console.log(`Server running on ${PORT}`);
